@@ -101,26 +101,13 @@ docker compose build
 ## Unprivileged user
 
 The bot runs as the user `bot` (UID 1000, GID 1000 by default). If the
-repository is owned by a different user on the host, build with matching IDs:
+repository is owned by a different user on the host, put the IDs of that user
+into a `.env` file in the repository root, where Docker Compose picks them up:
 
 ```
-LIMNORIA_UID=$(id -u) LIMNORIA_GID=$(id -g) docker compose build
+printf 'LIMNORIA_UID=%s\nLIMNORIA_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+docker compose build
 ```
-
-## Starting at boot
-
-The service has `restart: unless-stopped`, so Docker brings the bot back after
-a reboot (or after the bot crashes) by itself, as long as Docker starts with
-the system and the bot has been started once. On a Linux host with systemd:
-
-```
-sudo systemctl enable --now docker
-docker compose up -d
-```
-
-That is all; the bot keeps restarting until it is stopped explicitly with
-`docker compose stop` or `docker compose down`, after which it stays down
-across reboots until started again.
 
 ## Other commands
 

@@ -4,7 +4,8 @@ services:
       context: .
       args:
         # Match the owner of this repository on the host so the bot can write
-        # to conf/, data/, logs/, backup/ and its configuration file.
+        # to conf/, data/, logs/, backup/ and its configuration file. Set
+        # LIMNORIA_UID and LIMNORIA_GID in .env to override the defaults.
         UID: ${LIMNORIA_UID:-1000}
         GID: ${LIMNORIA_GID:-1000}
     image: dev_null/limnoria
