@@ -8,3 +8,7 @@ __pycache__/
 .bashrc
 .profile
 .bash_logout
+.bash_history
+.ssh/
+.docker/
+.env

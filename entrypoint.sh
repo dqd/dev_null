@@ -14,7 +14,13 @@ fi
 # Limnoria removes missing plugin directories from the configuration, so make
 # sure the plugins directory exists, together with the other directories the
 # bot writes to (they are ignored by git, so a fresh clone lacks them).
-cd "$HOME"
+if ! cd "$HOME"; then
+    echo "Cannot enter $HOME (running as $(id -u):$(id -g)); the repository is mounted there." >&2
+    echo "Rebuild with LIMNORIA_UID and LIMNORIA_GID set to its owner on the host:" >&2
+    echo "    LIMNORIA_UID=\$(id -u) LIMNORIA_GID=\$(id -g) docker compose build" >&2
+    ls -ldn "$HOME" >&2 || true
+    exit 1
+fi
 mkdir -p backup conf data logs plugins
 
 if [ -z "${LIMNORIA_CONFIG:-}" ]; then
