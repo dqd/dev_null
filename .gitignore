@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 .ruff_cache/
+.bashrc
+.profile
+.bash_logout
