@@ -1,0 +1,14 @@
+# Limnoria and its optional dependencies (see Limnoria's requirements.txt).
+limnoria
+chardet
+cryptography
+ecdsa
+feedparser
+pysocks
+python-dateutil
+pytz
+
+# Dependencies of the bundled plugins.
+megahal3
+requests
+alpha_vantage
