@@ -1,7 +1,9 @@
+dev_null.conf.bak
 backup/
 conf/
 data/
 logs/
+web/
 __pycache__/
 *.pyc
 .ruff_cache/
@@ -12,3 +14,7 @@ __pycache__/
 .ssh/
 .docker/
 .env
+.lesshst
+.viminfo
+.vimrc
+.selected_editor
