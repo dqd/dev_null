@@ -1,4 +1,7 @@
-/data/
+backup/
+conf/
+data/
+logs/
 __pycache__/
 *.pyc
 .ruff_cache/

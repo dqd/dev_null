@@ -1,5 +1,5 @@
 #!/bin/sh
-# Starts Limnoria with the configuration found in /data.
+# Starts Limnoria with the configuration found in its home directory.
 #
 # Any arguments are executed instead of the bot, which makes it possible to run
 # e.g. the configuration wizard:
@@ -12,16 +12,17 @@ if [ "$#" -gt 0 ]; then
 fi
 
 # Limnoria removes missing plugin directories from the configuration, so make
-# sure the plugins directory exists even when nothing is mounted there,
-# together with the directories for backups and logs.
-mkdir -p /data/backup /data/logs /data/plugins
+# sure the plugins directory exists, together with the other directories the
+# bot writes to (they are ignored by git, so a fresh clone lacks them).
+cd "$HOME"
+mkdir -p backup conf data logs plugins
 
 if [ -z "${LIMNORIA_CONFIG:-}" ]; then
-    set -- /data/*.conf
+    set -- ./*.conf
     if [ "$#" -eq 1 ] && [ -f "$1" ]; then
         LIMNORIA_CONFIG=$1
     else
-        echo "Expected exactly one *.conf file in /data or LIMNORIA_CONFIG set." >&2
+        echo "Expected exactly one *.conf file in $HOME or LIMNORIA_CONFIG set." >&2
         echo "Create a configuration with: docker compose run --rm bot supybot-wizard" >&2
         exit 1
     fi

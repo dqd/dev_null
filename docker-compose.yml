@@ -3,17 +3,17 @@ services:
     build:
       context: .
       args:
-        # Match the owner of ./data on the host so the bot can write to it.
+        # Match the owner of this repository on the host so the bot can write
+        # to conf/, data/, logs/, backup/ and its configuration file.
         UID: ${LIMNORIA_UID:-1000}
         GID: ${LIMNORIA_GID:-1000}
     image: dev_null/limnoria
     restart: unless-stopped
     volumes:
-      # Configuration (*.conf), conf/, data/, logs/ and backup/.
-      - ./data:/data
-      # Plugins from this repository.
-      - ./plugins:/data/plugins:ro
+      # The repository is the home directory of the bot: it holds the
+      # configuration (*.conf) and conf/, data/, logs/, backup/ and plugins/.
+      - .:/home/bot
     environment:
-      # Only needed when there is more than one *.conf file in ./data.
-      # LIMNORIA_CONFIG: /data/mybot.conf
+      # Only needed when there is more than one *.conf file in the repository.
+      # LIMNORIA_CONFIG: /home/bot/dev_null.conf
       TZ: ${TZ:-UTC}

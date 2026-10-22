@@ -17,17 +17,16 @@ RUN apt-get update \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-# Unprivileged user. /data holds the configuration, state and plugins.
+# Unprivileged user. Its home directory holds the configuration, state and
+# plugins; the repository is mounted there by docker-compose.yml.
 RUN groupadd --gid "$GID" bot \
-    && useradd --uid "$UID" --gid "$GID" --create-home --shell /usr/sbin/nologin bot \
-    && mkdir /data \
-    && chown bot:bot /data
+    && useradd --uid "$UID" --gid "$GID" --create-home --shell /usr/sbin/nologin bot
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh
 
 USER bot
-WORKDIR /data
-VOLUME ["/data"]
+ENV HOME=/home/bot
+WORKDIR /home/bot
 
 ENTRYPOINT ["entrypoint.sh"]

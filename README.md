@@ -13,19 +13,19 @@ ported to Python 3:
 
 ## Quick start
 
-Create the data directory and the bot configuration with the wizard:
+Create the bot configuration with the wizard:
 
 ```
-mkdir data
 docker compose run --rm bot supybot-wizard
 ```
 
 Answer the questions, keep the default `.` when asked where to create the
 directories, and save the configuration under its default name. The
-configuration file and the `conf`, `data`, `logs` and `backup` directories
-end up in `./data`. The plugins from this repository are mounted from
-`./plugins` as `/data/plugins`, which the wizard adds to
-`supybot.directories.plugins`, so they are available right away.
+repository root is the home and working directory of the bot, so the
+configuration file and the `conf`, `data`, `logs` and `backup` directories end
+up right here, next to `plugins`, which the wizard adds to
+`supybot.directories.plugins`, so the bundled plugins are available right
+away.
 
 Start the bot:
 
@@ -43,35 +43,38 @@ Then load the plugins you want:
 
 ## Configuration and data
 
-Everything the bot owns lives in `./data`, mounted as `/data` in the
-container:
+The repository is mounted as `/home/bot`, the home and working directory of
+the bot, so everything it owns lives in the repository root:
 
-| Path in `./data` | Purpose |
-| ---------------- | ------- |
-| `*.conf`         | bot configuration, created by the wizard |
-| `conf/`          | users, channels, ignores... |
-| `data/`          | plugin data (e.g. the MegaHAL brain and training file) |
-| `logs/`          | logs |
-| `backup/`        | backups of configuration and data |
-| `plugins/`       | the plugins from this repository, mounted read-only from `./plugins` |
+| Path      | Purpose |
+| --------- | ------- |
+| `*.conf`  | bot configuration, created by the wizard or [dev_null.conf](dev_null.conf) |
+| `conf/`   | users, channels, ignores... |
+| `data/`   | plugin data (e.g. the MegaHAL brain and training file) |
+| `logs/`   | logs |
+| `backup/` | backups of configuration and data |
+| `plugins/` | the plugins from this repository |
+
+The directories the bot writes to are ignored by git and created by the
+entrypoint when missing. The whole repository is mounted rather than the
+directories one by one because Limnoria rewrites its configuration file by
+renaming a temporary file over it, which does not work on a file mounted on
+its own.
 
 An existing Limnoria installation can be moved in as well: copy its
-configuration file and directories into `./data` and make sure the paths in
-`supybot.directories.*` are relative (the bot runs with `/data` as its working
-directory) or start with `/data`.
+configuration file and directories into the repository root and make sure the
+paths in `supybot.directories.*` are relative or start with `/home/bot`.
 
 The configuration of dev_null itself is in [dev_null.conf](dev_null.conf). It
-lists only the settings that differ from Limnoria's defaults and can be used
-instead of the wizard:
+lists only the settings that differ from Limnoria's defaults and is used as is:
 
 ```
-mkdir data
-cp dev_null.conf data/
 docker compose up -d
 ```
 
-The entrypoint starts the bot with the only `*.conf` file found in `/data`.
-With more than one, set `LIMNORIA_CONFIG` in `docker-compose.yml`.
+The entrypoint starts the bot with the only `*.conf` file found in the
+repository root. With more than one, set `LIMNORIA_CONFIG` in
+`docker-compose.yml`.
 
 ## Extra plugins
 
@@ -80,8 +83,7 @@ directory and add it to `supybot.directories.plugins`:
 
 ```yaml
     volumes:
-      - ./data:/data
-      - ./plugins:/data/plugins:ro
+      - .:/home/bot
       - /somewhere/else/plugins:/plugins:ro
 ```
 
@@ -98,8 +100,8 @@ docker compose build
 
 ## Unprivileged user
 
-The bot runs as the user `bot` (UID 1000, GID 1000 by default). If
-`./data` is owned by a different user on the host, build with matching IDs:
+The bot runs as the user `bot` (UID 1000, GID 1000 by default). If the
+repository is owned by a different user on the host, build with matching IDs:
 
 ```
 LIMNORIA_UID=$(id -u) LIMNORIA_GID=$(id -g) docker compose build
@@ -110,7 +112,7 @@ LIMNORIA_UID=$(id -u) LIMNORIA_GID=$(id -g) docker compose build
 Any command given to the container replaces the bot, for example:
 
 ```
-docker compose run --rm bot supybot-adduser data/conf/users.conf
+docker compose run --rm bot supybot-adduser conf/users.conf
 docker compose run --rm bot limnoria-test --plugins-dir plugins
 ```
 

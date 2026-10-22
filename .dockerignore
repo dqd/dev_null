@@ -1,4 +1,7 @@
 .git
+backup
+conf
 data
+logs
 **/__pycache__
 **/*.pyc
