@@ -8,6 +8,8 @@ services:
         UID: ${LIMNORIA_UID:-1000}
         GID: ${LIMNORIA_GID:-1000}
     image: dev_null/limnoria
+    # Always build the image instead of trying to pull it from a registry.
+    pull_policy: build
     restart: unless-stopped
     volumes:
       # The repository is the home directory of the bot: it holds the
