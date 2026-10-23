@@ -600,8 +600,17 @@ class DevNull(callbacks.PluginRegexp):
                 ],
                 max_output_tokens=300,
             )
-        except OpenAIError:
-            raise ValueError("The description could not be obtained.")
+        except OpenAIError as e:
+            # The full message stays in the log; the channel only learns the
+            # kind of failure, e.g. "AuthenticationError (HTTP 401)".
+            self.log.error("describe: OpenAI request failed: %r", e)
+            kind = type(e).__name__
+            status = getattr(e, "status_code", None)
+
+            if status:
+                kind = "{} (HTTP {})".format(kind, status)
+
+            raise ValueError("The description could not be obtained: {}.".format(kind))
 
         return self._shorten(response.output_text or "")
 
