@@ -28,3 +28,41 @@ conf.registerGlobalValue(
         always "sobě".""",
     ),
 )
+
+conf.registerGlobalValue(
+    DevNull,
+    "openaiApiKey",
+    registry.String(
+        "",
+        """The OpenAI API key used by the "describe" command.""",
+        private=True,
+    ),
+)
+
+conf.registerGlobalValue(
+    DevNull,
+    "describeModel",
+    registry.String(
+        "gpt-5.4-mini",
+        """The OpenAI model the "describe" command sends the image to.""",
+    ),
+)
+
+conf.registerGlobalValue(
+    DevNull,
+    "describeMaxSize",
+    registry.PositiveInteger(
+        8 * 1024 * 1024,
+        """The largest image, in bytes, the "describe" command downloads.""",
+    ),
+)
+
+conf.registerGlobalValue(
+    DevNull,
+    "describePrompt",
+    registry.String(
+        "Describe the image in one short English sentence of at most 100 characters.",
+        """The instruction sent to the model together with the image by the
+        "describe" command. The reply is cut to 100 characters anyway.""",
+    ),
+)

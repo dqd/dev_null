@@ -1,16 +1,31 @@
+import base64
+import io
+import ipaddress
 import os
 import re
+import socket
 import time
 import zlib
 from datetime import datetime, timedelta
 from random import choice, randint, sample
-from urllib.parse import quote, urlencode
+from http.client import HTTPException
+from urllib.parse import quote, urlencode, urlsplit
 
-import requests
+from openai import OpenAI, OpenAIError
+from PIL import Image
 
-from supybot.commands import additional, optional, urlSnarfer, wrap
+from supybot.commands import additional, optional, thread, urlSnarfer, wrap
+import supybot.conf as conf
 import supybot.ircmsgs as ircmsgs
 import supybot.callbacks as callbacks
+import supybot.utils as utils
+
+
+# Limits of the "describe" command that are not worth configuring.
+DESCRIBE_MAX_PIXELS = 50_000_000
+DESCRIBE_SIZE = (512, 512)
+DESCRIBE_MAX_LENGTH = 100
+DESCRIBE_TIMEOUT = 15
 
 
 class DevNull(callbacks.PluginRegexp):
@@ -460,30 +475,6 @@ class DevNull(callbacks.PluginRegexp):
 
     twitter = wrap(twitter, [optional("text")])
 
-    def predpoved(self, irc, msg, args):
-        """takes no arguments
-
-        Shows the weather forecast from Meteocentrum."""
-
-        try:
-            response = requests.get(
-                "https://www.meteocentrum.cz/predpoved-pocasi/cz/740/brno",
-                headers={"User-Agent": "Limnoria"},
-                timeout=10,
-            )
-            response.raise_for_status()
-        except requests.RequestException:
-            return irc.reply("Chyba spojení.")
-
-        r = re.search(r'property="og:description"\s+content="([^"]+)', response.text)
-
-        if r:
-            return irc.reply(r.group(1).strip())
-
-        return irc.reply("Změnil se formát předpovědi. Co teď budeme dělat?")
-
-    predpoved = wrap(predpoved)
-
     def tourette(self, irc, msg, args):
         """takes no arguments
 
@@ -491,6 +482,163 @@ class DevNull(callbacks.PluginRegexp):
         return irc.reply(" ".join(sample(self.expletives, 15)))
 
     tourette = wrap(tourette)
+
+    def _isPublicHost(self, host):
+        """Whether every address the host resolves to is a public one, so the
+        bot cannot be used to reach loopback, private or link-local hosts."""
+        try:
+            addresses = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        except (socket.gaierror, UnicodeError):
+            return False
+
+        if not addresses:
+            return False
+
+        for info in addresses:
+            address = ipaddress.ip_address(info[4][0])
+
+            if not address.is_global or address.is_multicast:
+                return False
+
+        return True
+
+    def _checkPublicUrl(self, url):
+        """Raises ValueError unless the URL is an http(s) one pointing to a
+        public host, so the bot cannot be used to reach loopback, private
+        or link-local hosts."""
+        parts = urlsplit(url)
+
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValueError("I cannot fetch that address.")
+
+        if not self._isPublicHost(parts.hostname):
+            raise ValueError("I cannot fetch that address.")
+
+    def _fetchImage(self, url, maxSize, headers):
+        """Downloads an image from a public http(s) URL with Limnoria's own
+        fetcher, so the configured proxy and User-Agent apply, and returns
+        its bytes. Raises ValueError with a message for the user when the
+        URL cannot or should not be fetched."""
+        self._checkPublicUrl(url)
+        headers = dict(headers, Accept="image/*")
+
+        try:
+            fd = utils.web.getUrlFd(url, headers=headers, timeout=DESCRIBE_TIMEOUT)
+        except utils.web.Error:
+            raise ValueError("Connection error.")
+
+        with fd:
+            # urllib follows redirects on its own, so check where it ended up.
+            self._checkPublicUrl(fd.geturl())
+
+            if fd.headers.get_content_maintype() != "image":
+                raise ValueError("There is no image at that address.")
+
+            length = fd.headers.get("Content-Length", "")
+
+            if length.isdigit() and int(length) > maxSize:
+                raise ValueError("The image is too large.")
+
+            try:
+                data = fd.read(maxSize + 1)
+            except (OSError, HTTPException):
+                raise ValueError("Connection error.")
+
+        if len(data) > maxSize:
+            raise ValueError("The image is too large.")
+
+        return data
+
+    def _prepareImage(self, data):
+        """Decodes the image, shrinks it to fit DESCRIBE_SIZE and re-encodes
+        it as a plain JPEG, so only a small image without any metadata is
+        sent to the model. Raises ValueError for anything Pillow rejects."""
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                if image.width * image.height > DESCRIBE_MAX_PIXELS:
+                    raise ValueError("The image is too large.")
+
+                image.thumbnail(DESCRIBE_SIZE)
+                output = io.BytesIO()
+                image.convert("RGB").save(output, "JPEG", quality=85)
+        except ValueError:
+            raise
+        except Exception:  # Pillow raises all sorts of errors on broken files.
+            raise ValueError("The image could not be read.")
+
+        return output.getvalue()
+
+    def _describeImage(self, jpeg):
+        """Asks the configured OpenAI model for a description of the JPEG
+        and returns it as a single line of at most DESCRIBE_MAX_LENGTH
+        characters."""
+        client = OpenAI(
+            api_key=self.registryValue("openaiApiKey"),
+            timeout=DESCRIBE_TIMEOUT * 2,
+            max_retries=1,
+        )
+        image = "data:image/jpeg;base64," + base64.b64encode(jpeg).decode("ascii")
+
+        try:
+            response = client.responses.create(
+                model=self.registryValue("describeModel"),
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": self.registryValue("describePrompt"),
+                            },
+                            {
+                                "type": "input_image",
+                                "image_url": image,
+                                "detail": "low",
+                            },
+                        ],
+                    }
+                ],
+                max_output_tokens=300,
+            )
+        except OpenAIError:
+            raise ValueError("The description could not be obtained.")
+
+        return self._shorten(response.output_text or "")
+
+    def _shorten(self, text):
+        """Collapses the text into one line of printable characters no
+        longer than DESCRIBE_MAX_LENGTH, so whatever the model (or a picture
+        full of instructions) produces fits into a single IRC message."""
+        text = " ".join("".join(c for c in text if c.isprintable()).split())
+
+        if len(text) > DESCRIBE_MAX_LENGTH:
+            text = text[: DESCRIBE_MAX_LENGTH - 1].rstrip() + "…"
+
+        return text
+
+    def describe(self, irc, msg, args, url):
+        """<url>
+
+        Describes the image at the URL in a sentence using an OpenAI model.
+        """
+        if not self.registryValue("openaiApiKey"):
+            irc.error("The API key is missing, set plugins.DevNull.openaiApiKey.")
+            return
+
+        try:
+            data = self._fetchImage(
+                url,
+                self.registryValue("describeMaxSize"),
+                conf.defaultHttpHeaders(irc.network, msg.channel),
+            )
+            description = self._describeImage(self._prepareImage(data))
+        except ValueError as e:
+            irc.error(str(e))
+            return
+
+        irc.reply(description or "I have no idea what is in that image.")
+
+    describe = thread(wrap(describe, ["httpUrl"]))
 
 
 Class = DevNull

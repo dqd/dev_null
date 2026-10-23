@@ -12,3 +12,5 @@ pytz
 megahal3
 requests
 alpha_vantage
+openai
+Pillow

@@ -1,7 +1,9 @@
-import unittest
+import io
+
+from PIL import Image
 
 import supybot.conf as conf
-from supybot.test import ChannelPluginTestCase, PluginTestCase, network
+from supybot.test import ChannelPluginTestCase, PluginTestCase
 
 
 class DevNullTestCase(PluginTestCase):
@@ -51,9 +53,42 @@ class DevNullTestCase(PluginTestCase):
     def testSpravci(self):
         self.assertResponse("spravci", "nevím")
 
-    @unittest.skipUnless(network, "network tests disabled")
-    def testPredpoved(self):
-        self.assertNotError("predpoved")
+    def testDescribeNeedsKey(self):
+        self.assertError("describe http://example.com/image.png")
+
+    def testDescribeRefusesLocalAddresses(self):
+        with conf.supybot.plugins.DevNull.openaiApiKey.context("test"):
+            for url in (
+                "http://127.0.0.1/image.png",
+                "http://10.1.2.3/image.png",
+                "http://192.168.1.1:8080/image.png",
+                "http://169.254.169.254/latest/meta-data/",
+            ):
+                self.assertRegexp("describe " + url, "cannot fetch")
+
+            # Limnoria's own URL check refuses these before the plugin does.
+            self.assertError("describe http://localhost/image.png")
+            self.assertError("describe ftp://example.com/image.png")
+
+    def testDescribeHelpers(self):
+        plugin = self.irc.getCallback("DevNull")
+        self.assertTrue(plugin._isPublicHost("8.8.8.8"))
+        self.assertTrue(plugin._isPublicHost("2001:4860:4860::8888"))
+        self.assertFalse(plugin._isPublicHost("0.0.0.0"))
+        self.assertFalse(plugin._isPublicHost("::1"))
+        self.assertFalse(plugin._isPublicHost("fe80::1"))
+        self.assertFalse(plugin._isPublicHost("224.0.0.1"))
+
+        source = io.BytesIO()
+        Image.new("RGBA", (2048, 1024), "red").save(source, "PNG")
+        with Image.open(io.BytesIO(plugin._prepareImage(source.getvalue()))) as image:
+            self.assertEqual(image.format, "JPEG")
+            self.assertEqual(image.size, (512, 256))
+        self.assertRaises(ValueError, plugin._prepareImage, b"not an image")
+
+        self.assertEqual(plugin._shorten("a\x01b\n  c"), "ab c")
+        self.assertEqual(len(plugin._shorten("x" * 200)), 100)
+        self.assertTrue(plugin._shorten("x" * 200).endswith("…"))
 
 
 class DevNullChannelTestCase(ChannelPluginTestCase):
