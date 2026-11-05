@@ -2,6 +2,7 @@ Limnoria plugins shipped with the Docker image, available in the container
 at /opt/limnoria/plugins:
 
 Currency  currency conversion (Frankfurter.app, optionally Alpha Vantage)
+Decide    lets the bot answer yes/no or pick one of several choices
 DevNull   assorted commands of the dev_null bot
 MegaHAL   Markov chain chatting bot (megahal3 package)
 Weather   current weather (Nominatim + MET Norway)
