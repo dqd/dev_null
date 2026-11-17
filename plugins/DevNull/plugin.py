@@ -599,6 +599,8 @@ class DevNull(callbacks.PluginRegexp):
                     }
                 ],
                 max_output_tokens=300,
+                reasoning={"effort": "none"},
+                store=False,
             )
         except OpenAIError as e:
             # The full message stays in the log; the channel only learns the
